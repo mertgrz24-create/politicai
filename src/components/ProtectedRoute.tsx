@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { ReactElement } from 'react'
 
 export function ProtectedRoute({ children }: { children: ReactElement }) {
-  const { session, loading } = useAuth()
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
@@ -13,6 +13,6 @@ export function ProtectedRoute({ children }: { children: ReactElement }) {
     )
   }
 
-  if (!session) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
   return children
 }

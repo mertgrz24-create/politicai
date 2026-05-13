@@ -1,0 +1,65 @@
+{
+  "name": "politicai-auth",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auth/login",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "aa000001-auth-0000-0000-000000000001",
+      "name": "Login Webhook",
+      "webhookId": "politicai-auth-login"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst body = $input.first().json.body ?? {};\nconst email = (body.email ?? '').trim();\nconst password = (body.password ?? '').trim();\n\n// Kimlik doğrulama — AUTH_EMAIL ve AUTH_PASSWORD n8n env var'dan gelir\nif (!email || !password) {\n  throw new Error('Email ve şifre zorunlu');\n}\nif (email !== $env.AUTH_EMAIL || password !== $env.AUTH_PASSWORD) {\n  throw new Error('Geçersiz kimlik bilgileri');\n}\n\n// HS256 JWT oluştur\nconst b64u = (obj) =>\n  Buffer.from(JSON.stringify(obj))\n    .toString('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nconst now = Math.floor(Date.now() / 1000);\nconst exp = now + 28800; // 8 saat\n\nconst header  = b64u({ alg: 'HS256', typ: 'JWT' });\nconst payload = b64u({ sub: email, iat: now, exp });\nconst sig = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nconst token = `${header}.${payload}.${sig}`;\n\nreturn [{ json: { token, expires_at: new Date(exp * 1000).toISOString() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "aa000001-auth-0000-0000-000000000002",
+      "name": "Kimlik Doğrula & JWT Oluştur"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "id": "aa000001-auth-0000-0000-000000000003",
+      "name": "200 Başarılı"
+    }
+  ],
+  "connections": {
+    "Login Webhook": {
+      "main": [
+        [{ "node": "Kimlik Doğrula & JWT Oluştur", "type": "main", "index": 0 }]
+      ]
+    },
+    "Kimlik Doğrula & JWT Oluştur": {
+      "main": [
+        [{ "node": "200 Başarılı", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "politicai-auth",
+  "tags": []
+}
