@@ -1,17 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import LoginPage from '@/pages/LoginPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-
-function Dashboard() {
-  return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-white mb-2">PoliticAI</h1>
-        <p className="text-gray-500 text-sm">Faz 1 altyapı kuruldu — dashboard Faz 4'te gelecek.</p>
-      </div>
-    </div>
-  )
-}
+import AppLayout from '@/components/layout/AppLayout'
+import DashboardPage from '@/pages/DashboardPage'
+import PersonaFormPage from '@/pages/PersonaFormPage'
 
 export default function App() {
   return (
@@ -19,13 +11,15 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/*"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="settings/persona" element={<PersonaFormPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   )

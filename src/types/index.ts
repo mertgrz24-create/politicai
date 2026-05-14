@@ -11,8 +11,8 @@ export interface Client {
 }
 
 export interface VoiceExample {
-  text: string
-  label?: string
+  tone: 'sert' | 'uzlasmaci' | 'espriyle'
+  example: string
 }
 
 export interface Persona {
