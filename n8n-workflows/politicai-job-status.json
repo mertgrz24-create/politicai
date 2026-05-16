@@ -1,0 +1,156 @@
+{
+  "name": "politicai-job-status",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "job-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "ee000001-job-0000-0000-000000000001",
+      "name": "Job Status Webhook",
+      "webhookId": "politicai-job-status"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nif (sig !== expected) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nconst job_id = item.query?.job_id ?? '';\nif (!job_id) throw new Error('400: job_id zorunlu');\n\nreturn [{ json: { job_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "ee000001-job-0000-0000-000000000002",
+      "name": "JWT Doğrula"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, client_id, news_id, status, error_message, created_at, updated_at FROM draft_jobs WHERE id='{{ $json.job_id }}' LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 0],
+      "id": "ee000001-job-0000-0000-000000000003",
+      "name": "Job Sorgula",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "status-check",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "saved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "ee000001-job-0000-0000-000000000004",
+      "name": "Status saved mi?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, variant_label, content, status, moderation_flags, created_at FROM drafts WHERE job_id='{{ $('JWT Doğrula').first().json.job_id }}' ORDER BY created_at;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, -80],
+      "id": "ee000001-job-0000-0000-000000000005",
+      "name": "Drafts Çek",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tüm draft satırlarını tek yanıtta topla\nconst job = $('Job Sorgula').first().json;\nconst draftItems = $('Drafts Çek').all();\nconst drafts = draftItems.map(i => i.json);\nreturn [{ json: { ...job, drafts } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -80],
+      "id": "ee000001-job-0000-0000-000000000006",
+      "name": "Sonuç Birleştir"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, -80],
+      "id": "ee000001-job-0000-0000-000000000007",
+      "name": "200 (saved + drafts)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 80],
+      "id": "ee000001-job-0000-0000-000000000008",
+      "name": "200 (in progress)"
+    }
+  ],
+  "connections": {
+    "Job Status Webhook": {
+      "main": [[{ "node": "JWT Doğrula", "type": "main", "index": 0 }]]
+    },
+    "JWT Doğrula": {
+      "main": [[{ "node": "Job Sorgula", "type": "main", "index": 0 }]]
+    },
+    "Job Sorgula": {
+      "main": [[{ "node": "Status saved mi?", "type": "main", "index": 0 }]]
+    },
+    "Status saved mi?": {
+      "main": [
+        [{ "node": "Drafts Çek", "type": "main", "index": 0 }],
+        [{ "node": "200 (in progress)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Drafts Çek": {
+      "main": [[{ "node": "Sonuç Birleştir", "type": "main", "index": 0 }]]
+    },
+    "Sonuç Birleştir": {
+      "main": [[{ "node": "200 (saved + drafts)", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "" },
+  "id": "politicai-job-status",
+  "tags": []
+}

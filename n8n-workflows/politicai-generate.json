@@ -1,0 +1,446 @@
+{
+  "name": "politicai-generate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "dd000001-gen-0000-0000-000000000001",
+      "name": "Generate Webhook",
+      "webhookId": "politicai-generate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nif (sig !== expected) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nconst body = item.body ?? {};\nif (!body.news_id) throw new Error('400: news_id zorunlu');\nif (!body.client_id) throw new Error('400: client_id zorunlu');\n\nreturn [{ json: { news_id: body.news_id, client_id: body.client_id, _sub: claims.sub } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "dd000001-gen-0000-0000-000000000002",
+      "name": "JWT Doğrula"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { news_id, client_id, _sub } = $input.first().json;\nconst job_id = require('crypto').randomUUID();\nreturn [{ json: { job_id, news_id, client_id, _sub } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "dd000001-gen-0000-0000-000000000003",
+      "name": "Job ID Üret"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO draft_jobs (id, client_id, news_id, status)\nVALUES ('{{ $json.job_id }}', '{{ $json.client_id }}', '{{ $json.news_id }}', 'queued')\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [660, 0],
+      "id": "dd000001-gen-0000-0000-000000000004",
+      "name": "Job Kaydı Oluştur",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bir önceki adımdan job_id'yi koru (Postgres node yeni item döndürür)\nconst prev = $('Job ID Üret').first().json;\nreturn [{ json: prev }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "dd000001-gen-0000-0000-000000000005",
+      "name": "Context Koru"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"job_id\": \"{{ $json.job_id }}\", \"status\": \"queued\" }",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1100, 0],
+      "id": "dd000001-gen-0000-0000-000000000006",
+      "name": "202 Accepted"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE draft_jobs SET status='fetching_news', updated_at=now() WHERE id='{{ $json.job_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 0],
+      "id": "dd000001-gen-0000-0000-000000000007",
+      "name": "Status: fetching_news",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Context Koru').first()];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "id": "dd000001-gen-0000-0000-000000000008",
+      "name": "Context Taşı 1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, source_name, title, description, link, published_at FROM news_pool WHERE id='{{ $json.news_id }}' LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1760, -80],
+      "id": "dd000001-gen-0000-0000-000000000009",
+      "name": "Haber Çek",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT identity, ideology, themes, banned_words, banned_topics, address_form, voice_examples, reference_prompt, max_chars FROM personas WHERE client_id='{{ $json.client_id }}' LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1760, 80],
+      "id": "dd000001-gen-0000-0000-000000000010",
+      "name": "Persona Çek",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Haber ve persona verilerini + context'i birleştir\nconst ctx = $('Context Taşı 1').first().json;\nconst news = $('Haber Çek').first().json;\nconst persona = $('Persona Çek').first().json;\n\nif (!news?.title) throw new Error('Haber bulunamadı: ' + ctx.news_id);\nif (!persona?.identity) throw new Error('Persona bulunamadı: ' + ctx.client_id);\n\nreturn [{ json: { ...ctx, news, persona } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 0],
+      "id": "dd000001-gen-0000-0000-000000000011",
+      "name": "Veri Birleştir"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE draft_jobs SET status='building_prompt', updated_at=now() WHERE id='{{ $json.job_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2200, 0],
+      "id": "dd000001-gen-0000-0000-000000000012",
+      "name": "Status: building_prompt",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gemini prompt'u oluştur — gemini-prompt-engineering skill'inden\nconst d = $('Veri Birleştir').first().json;\nconst persona = d.persona;\nconst news = d.news;\n\nconst IDEOLOGY_BLOCKS = {\n  conservative: `Muhafazakar, milliyetçi, manevi değerlere bağlı bir perspektif.\nVatan, millet, aile, ecdat, şehit, gazi, bayrak vurguları doğal.\n\"Aziz milletim\", \"değerli kardeşlerim\", \"milletimizin sağduyusu\" gibi hitaplar uygun.\nKelimeler: birlik, beraberlik, kardeşlik, dayanışma, fedakarlık, ecdat, mukaddes, kutlu.\nKULLANMA: küresel, evrensel, bireysel, seküler, kozmopolit gibi nesnel-mesafeli sözcükler.`,\n  social_democrat: `Sosyal demokrat, laik, eşitlikçi bir perspektif.\nEmek, eşitlik, sosyal adalet, demokrasi, laiklik, hukuk devleti vurguları.\n\"Değerli yurttaşlarımız\", \"emekçi kardeşlerim\", \"halkımız\" gibi hitaplar uygun.\nKelimeler: hak, özgürlük, eşitlik, dayanışma, emek, kadın, çocuk, çevre, bilim, akıl.\nKULLANMA: kısmet, nasip, ecdat gibi muhafazakar sözcükler.`,\n  liberal: `Liberal, bireyci, özgürlükçü bir perspektif.\nBirey, özgürlük, piyasa, girişimcilik, akıl, bilim, hukuk devleti vurguları.\n\"Değerli vatandaşlarımız\", \"bireyler\" gibi hitaplar uygun.\nKelimeler: özgürlük, bireysel hak, piyasa, rekabet, girişimcilik, inovasyon, akıl.\nKULLANMA: cemaat, ümmet, toplumcu sözcükler.`,\n  nationalist: `Milliyetçi, vatansever, Türklük vurgulu bir perspektif.\nVatan, millet, Türklük, şehit, gazi, tarih, ecdat odaklı.\n\"Aziz Türk milletim\", \"soylu milletimiz\" gibi hitaplar uygun.\nKelimeler: vatan, millet, Türk, bayrak, şehadet, gazilik, kahramanlık, beka.\nKULLANMA: küresel vatandaşlık, evrenselcilik gibi sözcükler.`,\n  left: `Sol, halkçı, emek odaklı bir perspektif.\nEmek, sınıf, halk, mücadele, dayanışma vurguları.\n\"Halkımız\", \"emekçi kardeşlerim\", \"ezilenler\" gibi hitaplar uygun.\nKelimeler: emek, sınıf, mücadele, dayanışma, eşitlik, halkçı.\nKULLANMA: piyasa, rekabet, girişimci gibi liberal sözcükler.`,\n};\n\nconst ideologyBlock = IDEOLOGY_BLOCKS[persona.ideology] || IDEOLOGY_BLOCKS.conservative;\n\nconst voiceExamples = Array.isArray(persona.voice_examples)\n  ? persona.voice_examples.map((ex, i) => {\n      const text = ex.example || ex.text || ex;\n      return `Örnek ${i + 1} (${ex.tone || 'genel'}): \"${text}\"`;\n    }).join('\\n')\n  : '';\n\nconst themesText = (persona.themes || []).join(', ');\nconst bannedTopicsText = (persona.banned_topics || []).join(', ') || 'yok';\nconst bannedWordsText = (persona.banned_words || []).join(', ') || 'yok';\nconst maxChars = persona.max_chars || 280;\nconst addressForm = persona.address_form || '';\n\nconst pubDate = news.published_at\n  ? new Date(news.published_at).toLocaleDateString('tr-TR')\n  : 'Belirtilmemiş';\n\nconst prompt = `ROL: Sen ${persona.identity} için sosyal medya yazıyorsun. Profesyonel sosyal medya yöneticisisin.\n\nİDEOLOJİK ÇERÇEVE:\n${ideologyBlock}\n\nÜSLUP REFERANSI (bu örneklerin tonunu birebir yakala):\n${voiceExamples}\n\nTEMATİK ODAK:\n- Bu temalara değin: ${themesText}\n- Bu konulara KESİNLİKLE değinme: ${bannedTopicsText}\n- Bu kelimeleri KESİNLİKLE kullanma: ${bannedWordsText}\n- Hitap şekli: \"${addressForm}\"\n\nHABER:\nBaşlık: ${news.title}\nÖzet: ${news.description || '(özet yok, sadece başlık bağlamıyla yaz)'}\nKaynak: ${news.source_name}\nTarih: ${pubDate}\n\nGÖREV: Bu haberi ${persona.identity} bakış açısıyla yorumlayan 3 farklı tweet üret.\nHer tweet, devlet adamı olgunluğunda, kişisel bir tepki/yorum niteliğinde olmalı.\nHaber başlığını tekrar etme — haberin özünü kavrayıp, ${persona.identity}'in bu konudaki düşüncesini/duygusunu yansıtan bir tweet yaz.\n\nVARYANTLAR:\n1. \"sert\" — Net, kararlı, mesajın arkasında durulan ton\n2. \"uzlasmaci\" — Birleştirici, milleti kucaklayan, sakin ton\n3. \"espriyle\" — Hafif esprili, samimi, doğal dilde ton\n\nKISITLAR (mutlaka):\n- Her tweet maksimum ${maxChars} karakter\n- Türkçe DIŞINDA hiçbir kelime KULLANMA\n- Emoji ASLA kullanma\n- Hashtag ASLA kullanma\n- URL ekleme\n- \"İşte detaylar\", \"okumak için tıkla\" gibi gazete dilini KULLANMA\n- Yasaklı kelime listesindeki kelimeleri hiçbir varyantta kullanma\n\nÇIKTI FORMATI (SADECE bu JSON, başka hiçbir metin yazma):\n{\"variants\":[{\"label\":\"sert\",\"content\":\"...\",\"char_count\":0},{\"label\":\"uzlasmaci\",\"content\":\"...\",\"char_count\":0},{\"label\":\"espriyle\",\"content\":\"...\",\"char_count\":0}]}\n\nDÜŞÜN: Haberin özünü kavra. ${persona.identity}'in bu konuda ne hissedeceğini hayal et. O duyguyu yansıtan kısa ve nitelikli bir tweet yaz. Üslup örneklerine sadık kal.`;\n\nreturn [{ json: { ...d, prompt } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 0],
+      "id": "dd000001-gen-0000-0000-000000000013",
+      "name": "Prompt Oluştur"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE draft_jobs SET status='calling_gemini', updated_at=now() WHERE id='{{ $json.job_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2640, 0],
+      "id": "dd000001-gen-0000-0000-000000000014",
+      "name": "Status: calling_gemini",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Prompt Oluştur').first()];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 0],
+      "id": "dd000001-gen-0000-0000-000000000015",
+      "name": "Context Taşı 2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={\n  \"contents\": [{ \"role\": \"user\", \"parts\": [{ \"text\": {{ JSON.stringify($json.prompt) }} }] }],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"temperature\": 0.7,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 2048\n  }\n}",
+        "options": {
+          "retry": {
+            "enabled": true,
+            "maxTries": 3,
+            "waitBetweenTries": 2000
+          },
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3080, 0],
+      "id": "dd000001-gen-0000-0000-000000000016",
+      "name": "Gemini API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gemini yanıtını parse et ve doğrula\nconst ctx = $('Context Taşı 2').first().json;\nconst geminiResponse = $input.first().json;\n\nfunction cleanJsonResponse(text) {\n  if (typeof text !== 'string') text = JSON.stringify(text);\n  text = text.replace(/^```json\\s*/i, '').replace(/^```\\s*/, '').replace(/```\\s*$/g, '');\n  text = text.trim();\n  const firstBrace = text.indexOf('{');\n  const lastBrace = text.lastIndexOf('}');\n  if (firstBrace !== -1 && lastBrace !== -1) {\n    text = text.slice(firstBrace, lastBrace + 1);\n  }\n  return text;\n}\n\n// Gemini yanıt yapısı: candidates[0].content.parts[0].text\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;\nif (!rawText) throw new Error('Gemini boş yanıt döndürdü');\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanJsonResponse(rawText));\n} catch {\n  throw new Error('Gemini geçersiz JSON döndürdü: ' + rawText.substring(0, 200));\n}\n\nif (!parsed.variants || !Array.isArray(parsed.variants) || parsed.variants.length !== 3) {\n  throw new Error('Beklenen 3 varyant gelmedi');\n}\n\nconst validLabels = ['sert', 'uzlasmaci', 'espriyle'];\nconst maxChars = ctx.persona?.max_chars || 280;\n\nconst variants = parsed.variants.map(v => {\n  if (!validLabels.includes(v.label)) throw new Error('Geçersiz varyant label: ' + v.label);\n  const content = String(v.content || '').trim();\n  if (!content) throw new Error('Boş varyant: ' + v.label);\n  if (content.length > maxChars + 20) throw new Error(`Varyant çok uzun (${content.length} kar): ${v.label}`);\n  return { label: v.label, content, char_count: content.length };\n});\n\nreturn [{ json: { ...ctx, variants } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 0],
+      "id": "dd000001-gen-0000-0000-000000000017",
+      "name": "JSON Parse & Validate"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE draft_jobs SET status='moderating', updated_at=now() WHERE id='{{ $json.job_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3520, 0],
+      "id": "dd000001-gen-0000-0000-000000000018",
+      "name": "Status: moderating",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// İçerik moderasyonu — flag'ler dolar, otomatik reject yok (insan karar verir)\nconst d = $('JSON Parse & Validate').first().json;\nconst persona = d.persona;\nconst bannedWords = persona.banned_words || [];\nconst maxChars = persona.max_chars || 280;\nconst URL_REGEX = /https?:\\/\\/\\S+|www\\.\\S+/gi;\nconst HASHTAG_REGEX = /#\\w+/g;\n\nconst moderatedVariants = d.variants.map(v => {\n  const flags = [];\n  const content = v.content;\n\n  for (const word of bannedWords) {\n    if (word && content.toLowerCase().includes(word.toLowerCase())) {\n      flags.push(`banned_word:${word}`);\n    }\n  }\n  if (content.length > maxChars) flags.push(`over_limit:${content.length}`);\n  if (URL_REGEX.test(content)) flags.push('contains_url');\n  if (HASHTAG_REGEX.test(content)) flags.push('contains_hashtag');\n\n  return { ...v, moderation_flags: flags };\n});\n\nreturn [{ json: { ...d, variants: moderatedVariants } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3740, 0],
+      "id": "dd000001-gen-0000-0000-000000000019",
+      "name": "Moderasyon"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 3 draft'ı Postgres INSERT için SQL'e dönüştür\nconst d = $input.first().json;\nconst esc = (s) => s == null ? 'NULL' : `'${String(s).replace(/'/g, \"''\")}'`;\nconst escArr = (arr) => arr && arr.length ? `ARRAY[${arr.map(esc).join(',')}]::text[]` : `'{}'::text[]`;\n\nconst sqls = d.variants.map(v =>\n  `INSERT INTO drafts (client_id, news_id, job_id, content, variant_label, status, moderation_flags)\n   VALUES (${esc(d.client_id)}, ${esc(d.news_id)}, ${esc(d.job_id)}, ${esc(v.content)}, ${esc(v.label)}, 'pending', ${escArr(v.moderation_flags)})\n   RETURNING id, variant_label;`\n);\n\nreturn sqls.map(sql => ({ json: { sql, job_id: d.job_id, client_id: d.client_id } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3960, 0],
+      "id": "dd000001-gen-0000-0000-000000000020",
+      "name": "Draft SQL Oluştur"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4180, 0],
+      "id": "dd000001-gen-0000-0000-000000000021",
+      "name": "Draft INSERT",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE draft_jobs SET status='saved', updated_at=now() WHERE id='{{ $json.job_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4400, 0],
+      "id": "dd000001-gen-0000-0000-000000000022",
+      "name": "Status: saved",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hata durumunda job'ı failed olarak işaretle\nconst crypto = require('crypto');\nconst errMsg = $input.first()?.json?.message ?? 'Bilinmeyen hata';\n\n// Tüm olası context node'larından job_id bul\nlet job_id = null;\nconst contextNodes = ['Context Taşı 2', 'Context Taşı 1', 'Context Koru', 'Job ID Üret'];\nfor (const nodeName of contextNodes) {\n  try {\n    const j = $(nodeName).first()?.json?.job_id;\n    if (j) { job_id = j; break; }\n  } catch { /* node henüz çalışmamış olabilir */ }\n}\n\nif (!job_id) return [{ json: { skipped: true, error: errMsg } }];\n\nconst esc = (s) => `'${String(s).replace(/'/g, \"''\")}'`;\nreturn [{ json: { sql: `UPDATE draft_jobs SET status='failed', error_message=${esc(errMsg.substring(0, 500))}, updated_at=now() WHERE id='${job_id}';`, job_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 240],
+      "id": "dd000001-gen-0000-0000-000000000023",
+      "name": "Hata İşle"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3520, 240],
+      "id": "dd000001-gen-0000-0000-000000000024",
+      "name": "Status: failed",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Generate Webhook": {
+      "main": [[{ "node": "JWT Doğrula", "type": "main", "index": 0 }]]
+    },
+    "JWT Doğrula": {
+      "main": [[{ "node": "Job ID Üret", "type": "main", "index": 0 }]]
+    },
+    "Job ID Üret": {
+      "main": [[{ "node": "Job Kaydı Oluştur", "type": "main", "index": 0 }]]
+    },
+    "Job Kaydı Oluştur": {
+      "main": [[{ "node": "Context Koru", "type": "main", "index": 0 }]]
+    },
+    "Context Koru": {
+      "main": [[{ "node": "202 Accepted", "type": "main", "index": 0 }]]
+    },
+    "202 Accepted": {
+      "main": [[{ "node": "Status: fetching_news", "type": "main", "index": 0 }]]
+    },
+    "Status: fetching_news": {
+      "main": [[{ "node": "Context Taşı 1", "type": "main", "index": 0 }]]
+    },
+    "Context Taşı 1": {
+      "main": [
+        [{ "node": "Haber Çek", "type": "main", "index": 0 }],
+        [{ "node": "Persona Çek", "type": "main", "index": 0 }]
+      ]
+    },
+    "Haber Çek": {
+      "main": [[{ "node": "Veri Birleştir", "type": "main", "index": 0 }]]
+    },
+    "Persona Çek": {
+      "main": [[{ "node": "Veri Birleştir", "type": "main", "index": 1 }]]
+    },
+    "Veri Birleştir": {
+      "main": [[{ "node": "Status: building_prompt", "type": "main", "index": 0 }]]
+    },
+    "Status: building_prompt": {
+      "main": [[{ "node": "Prompt Oluştur", "type": "main", "index": 0 }]]
+    },
+    "Prompt Oluştur": {
+      "main": [[{ "node": "Status: calling_gemini", "type": "main", "index": 0 }]]
+    },
+    "Status: calling_gemini": {
+      "main": [[{ "node": "Context Taşı 2", "type": "main", "index": 0 }]]
+    },
+    "Context Taşı 2": {
+      "main": [[{ "node": "Gemini API", "type": "main", "index": 0 }]]
+    },
+    "Gemini API": {
+      "main": [
+        [{ "node": "JSON Parse & Validate", "type": "main", "index": 0 }],
+        [{ "node": "Hata İşle", "type": "main", "index": 0 }]
+      ]
+    },
+    "JSON Parse & Validate": {
+      "main": [
+        [{ "node": "Status: moderating", "type": "main", "index": 0 }],
+        [{ "node": "Hata İşle", "type": "main", "index": 0 }]
+      ]
+    },
+    "Status: moderating": {
+      "main": [[{ "node": "Moderasyon", "type": "main", "index": 0 }]]
+    },
+    "Moderasyon": {
+      "main": [[{ "node": "Draft SQL Oluştur", "type": "main", "index": 0 }]]
+    },
+    "Draft SQL Oluştur": {
+      "main": [[{ "node": "Draft INSERT", "type": "main", "index": 0 }]]
+    },
+    "Draft INSERT": {
+      "main": [[{ "node": "Status: saved", "type": "main", "index": 0 }]]
+    },
+    "Hata İşle": {
+      "main": [[{ "node": "Status: failed", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "politicai-generate",
+  "tags": []
+}

@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Settings, History, LogOut } from 'lucide-react'
+import { LayoutDashboard, Newspaper, Settings, History, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/news', label: 'Haberler', icon: Newspaper, end: false },
   { to: '/settings/persona', label: 'Persona', icon: Settings, end: false },
   { to: '/history', label: 'Geçmiş', icon: History, end: false },
 ] as const

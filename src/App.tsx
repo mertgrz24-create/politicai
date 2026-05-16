@@ -3,6 +3,7 @@ import LoginPage from '@/pages/LoginPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/DashboardPage'
+import NewsPage from '@/pages/NewsPage'
 import PersonaFormPage from '@/pages/PersonaFormPage'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="news" element={<NewsPage />} />
           <Route path="settings/persona" element={<PersonaFormPage />} />
         </Route>
       </Routes>
