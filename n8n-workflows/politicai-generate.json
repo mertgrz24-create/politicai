@@ -125,25 +125,39 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT identity, ideology, themes, banned_words, banned_topics, address_form, voice_examples, reference_prompt, max_chars FROM personas WHERE client_id='{{ $json.client_id }}' LIMIT 1;",
-        "options": {}
+        "jsCode": "// DATABASE_URL'den Neon HTTP API bağlantı bilgilerini çıkar\nconst dbUrl = $env.DATABASE_URL || '';\nconst match = dbUrl.match(/^postgresql:\\/\\/([^:]+):([^@]+)@([^\\/]+)\\/(.+?)(\\?.*)?$/);\nif (!match) throw new Error('DATABASE_URL n8n env var olarak tanımlı değil veya parse edilemedi');\nconst [, , , host] = match;\nconst ctx = $input.first().json;\nreturn [{ json: { ...ctx, _neon_api_url: `https://${host}/sql/v1`, _neon_conn: dbUrl } }];"
       },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [1760, 80],
-      "id": "dd000001-gen-0000-0000-000000000010",
-      "name": "Persona Çek",
-      "credentials": {
-        "postgres": {
-          "id": "REPLACE_WITH_NEON_CRED_ID",
-          "name": "Neon DB"
-        }
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 160],
+      "id": "dd000001-gen-0000-0000-000000000025",
+      "name": "Neon Auth Parse"
     },
     {
       "parameters": {
-        "jsCode": "// Haber ve persona verilerini + context'i birleştir\nconst ctx = $('Context Taşı 1').first().json;\nconst news = $('Haber Çek').first().json;\nconst persona = $('Persona Çek').first().json;\n\nif (!news?.title) throw new Error('Haber bulunamadı: ' + ctx.news_id);\nif (!persona?.identity) throw new Error('Persona bulunamadı: ' + ctx.client_id);\n\nreturn [{ json: { ...ctx, news, persona } }];"
+        "method": "POST",
+        "url": "={{ $json._neon_api_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Neon-Connection-String", "value": "={{ $json._neon_conn }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"query\": \"SELECT identity, ideology, themes, banned_words, banned_topics, address_form, voice_examples, reference_prompt, max_chars FROM personas WHERE client_id = $1 LIMIT 1\", \"params\": [\"{{ $json.client_id }}\"] }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 160],
+      "id": "dd000001-gen-0000-0000-000000000010",
+      "name": "Persona Çek"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Haber ve persona verilerini + context'i birleştir\nconst ctx = $('Context Taşı 1').first().json;\nconst news = $('Haber Çek').first().json;\n// Neon HTTP API { rows: [...] } döndürür; Postgres node doğrudan obje döndürür\nconst personaRaw = $('Persona Çek').first().json;\nconst persona = Array.isArray(personaRaw?.rows) ? personaRaw.rows[0] : personaRaw;\n\nif (!news?.title) throw new Error('Haber bulunamadı: ' + ctx.news_id);\nif (!persona?.identity) throw new Error('Persona bulunamadı: ' + ctx.client_id);\n\nreturn [{ json: { ...ctx, news, persona } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -379,9 +393,14 @@
     },
     "Context Taşı 1": {
       "main": [
-        [{ "node": "Haber Çek", "type": "main", "index": 0 }],
-        [{ "node": "Persona Çek", "type": "main", "index": 0 }]
+        [
+          { "node": "Haber Çek", "type": "main", "index": 0 },
+          { "node": "Neon Auth Parse", "type": "main", "index": 0 }
+        ]
       ]
+    },
+    "Neon Auth Parse": {
+      "main": [[{ "node": "Persona Çek", "type": "main", "index": 0 }]]
     },
     "Haber Çek": {
       "main": [[{ "node": "Veri Birleştir", "type": "main", "index": 0 }]]

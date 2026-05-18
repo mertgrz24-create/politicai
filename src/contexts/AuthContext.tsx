@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { decodeJwt } from 'jose'
 import { apiPost, tokenStorage } from '@/lib/api'
 
 export interface AuthUser {
@@ -20,12 +19,16 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 function parseToken(token: string): AuthUser | null {
   try {
-    const payload = decodeJwt(token)
-    if (!payload.exp || payload.exp * 1000 < Date.now()) return null
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, '='))
+    const payload = JSON.parse(json) as Record<string, unknown>
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null
     return {
       email: String(payload.sub ?? ''),
-      sub: String(payload.sub ?? ''),
-      exp: payload.exp,
+      sub:   String(payload.sub ?? ''),
+      exp:   payload.exp,
     }
   } catch {
     return null
