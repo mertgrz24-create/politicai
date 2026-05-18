@@ -1,0 +1,143 @@
+{
+  "name": "politicai-publish",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "publish",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "hh000001-pub-0000-0000-000000000001",
+      "name": "Publish Webhook",
+      "webhookId": "politicai-publish"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\nconst [header, payload, sig] = parts;\nconst expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`).digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\nif (sig !== expected) throw new Error('401: Geçersiz imza');\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\nconst body = item.body ?? {};\nif (!body.draft_id) throw new Error('400: draft_id zorunlu');\nreturn [{ json: { draft_id: body.draft_id, _sub: claims.sub } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "hh000001-pub-0000-0000-000000000002",
+      "name": "JWT Doğrula"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, content, status, client_id FROM drafts WHERE id='{{ $json.draft_id }}' LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 0],
+      "id": "hh000001-pub-0000-0000-000000000003",
+      "name": "Draft Çek",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Faz 4: Twitter bağlı değil — draft'ı onaylar, Faz 5'te bu node Twitter'a gönderir\nconst draft = $input.first().json;\nif (!draft?.id) throw new Error('404: Draft bulunamadı');\nif (draft.status === 'published') throw new Error('409: Bu taslak zaten yayınlandı');\nconst jwtCtx = $('JWT Doğrula').first().json;\nreturn [{ json: { draft_id: draft.id, client_id: draft.client_id, _sub: jwtCtx._sub } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "hh000001-pub-0000-0000-000000000004",
+      "name": "Doğrula & Hazırla"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE drafts SET status='approved', reviewed_at=now() WHERE id='{{ $json.draft_id }}' RETURNING id, status;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, 0],
+      "id": "hh000001-pub-0000-0000-000000000005",
+      "name": "Status: approved",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Doğrula & Hazırla').first().json;\nconst esc = (s) => `'${String(s).replace(/'/g, \"''\")}'`;\nconst sql = `INSERT INTO audit_log (action, resource_type, resource_id, details)\nVALUES ('publish', 'draft', ${esc(prev.draft_id)}, '{\"note\": \"faz4_stub_twitter_not_connected\"}'::jsonb);`;\nreturn [{ json: { sql } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "hh000001-pub-0000-0000-000000000006",
+      "name": "Audit SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 0],
+      "id": "hh000001-pub-0000-0000-000000000007",
+      "name": "Audit Insert",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_NEON_CRED_ID",
+          "name": "Neon DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"status\": \"approved\", \"note\": \"twitter_not_connected_yet\" }",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1540, 0],
+      "id": "hh000001-pub-0000-0000-000000000008",
+      "name": "200 OK"
+    }
+  ],
+  "connections": {
+    "Publish Webhook": {
+      "main": [[{ "node": "JWT Doğrula", "type": "main", "index": 0 }]]
+    },
+    "JWT Doğrula": {
+      "main": [[{ "node": "Draft Çek", "type": "main", "index": 0 }]]
+    },
+    "Draft Çek": {
+      "main": [[{ "node": "Doğrula & Hazırla", "type": "main", "index": 0 }]]
+    },
+    "Doğrula & Hazırla": {
+      "main": [[{ "node": "Status: approved", "type": "main", "index": 0 }]]
+    },
+    "Status: approved": {
+      "main": [[{ "node": "Audit SQL", "type": "main", "index": 0 }]]
+    },
+    "Audit SQL": {
+      "main": [[{ "node": "Audit Insert", "type": "main", "index": 0 }]]
+    },
+    "Audit Insert": {
+      "main": [[{ "node": "200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "" },
+  "id": "politicai-publish",
+  "tags": []
+}
