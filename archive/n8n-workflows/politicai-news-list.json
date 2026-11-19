@@ -6,7 +6,7 @@
         "httpMethod": "GET",
         "path": "news-list",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "allowedOrigins": "http://localhost:5173,http://127.0.0.1:5173" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nif (sig !== expected) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nreturn [{ json: { _sub: claims.sub } }];"
+        "jsCode": "const crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nconst __sigBuf = Buffer.from(sig);\nconst __expBuf = Buffer.from(expected);\nif (__sigBuf.length !== __expBuf.length || !crypto.timingSafeEqual(__sigBuf, __expBuf)) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nreturn [{ json: { _sub: claims.sub } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

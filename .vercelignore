@@ -1,0 +1,16 @@
+.git
+node_modules
+dist
+.env*
+.claude
+.agents
+.codex
+archive
+docs
+scripts
+supabase
+database
+README.md
+CLAUDE.md
+progress.md
+*.tsbuildinfo

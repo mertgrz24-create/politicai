@@ -6,7 +6,7 @@
         "httpMethod": "GET",
         "path": "drafts",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "allowedOrigins": "http://localhost:5173,http://127.0.0.1:5173" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -20,7 +20,7 @@
         "httpMethod": "POST",
         "path": "draft/update",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "allowedOrigins": "http://localhost:5173,http://127.0.0.1:5173" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -34,7 +34,7 @@
         "httpMethod": "POST",
         "path": "draft/batch",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "allowedOrigins": "http://localhost:5173,http://127.0.0.1:5173" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -46,7 +46,7 @@
 
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  if (sig !== expected) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\njwtVerify(item);\nconst client_id = item.query?.client_id ?? $env.DEFAULT_CLIENT_ID ?? '';\nif (!client_id) throw new Error('400: client_id zorunlu');\nreturn [{ json: { client_id } }];"
+        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  const __sigBuf = Buffer.from(sig);\nconst __expBuf = Buffer.from(expected);\nif (__sigBuf.length !== __expBuf.length || !crypto.timingSafeEqual(__sigBuf, __expBuf)) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\njwtVerify(item);\nconst client_id = item.query?.client_id ?? $env.DEFAULT_CLIENT_ID ?? '';\nif (!client_id) throw new Error('400: client_id zorunlu');\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nif (!UUID_RE.test(client_id)) throw new Error('400: client_id geçersiz format');\nreturn [{ json: { client_id } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -56,7 +56,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  if (sig !== expected) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\nconst claims = jwtVerify(item);\nconst body = item.body ?? {};\nif (!body.draft_id) throw new Error('400: draft_id zorunlu');\nconst validActions = ['approve', 'reject', 'edit'];\nif (!validActions.includes(body.action)) throw new Error('400: Geçersiz action');\nif (body.action === 'edit' && !body.content?.trim()) throw new Error('400: edit için content zorunlu');\nreturn [{ json: { draft_id: body.draft_id, action: body.action, content: body.content ?? null, _sub: claims.sub } }];"
+        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  const __sigBuf = Buffer.from(sig);\nconst __expBuf = Buffer.from(expected);\nif (__sigBuf.length !== __expBuf.length || !crypto.timingSafeEqual(__sigBuf, __expBuf)) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\nconst claims = jwtVerify(item);\nconst body = item.body ?? {};\nif (!body.draft_id) throw new Error('400: draft_id zorunlu');\nconst validActions = ['approve', 'reject', 'edit'];\nif (!validActions.includes(body.action)) throw new Error('400: Geçersiz action');\nif (body.action === 'edit' && !body.content?.trim()) throw new Error('400: edit için content zorunlu');\nreturn [{ json: { draft_id: body.draft_id, action: body.action, content: body.content ?? null, _sub: claims.sub } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -66,7 +66,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  if (sig !== expected) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\nconst claims = jwtVerify(item);\nconst body = item.body ?? {};\nif (!body.draft_ids || !Array.isArray(body.draft_ids) || body.draft_ids.length === 0) throw new Error('400: draft_ids zorunlu');\nif (body.draft_ids.length > 20) throw new Error('400: En fazla 20 taslak');\nconst validActions = ['approve', 'reject'];\nif (!validActions.includes(body.action)) throw new Error('400: Geçersiz batch action');\nreturn [{ json: { draft_ids: body.draft_ids, action: body.action, _sub: claims.sub } }];"
+        "jsCode": "const crypto = require('crypto');\nfunction jwtVerify(item) {\n  function b64uDecode(s) {\n    s = s.replace(/-/g, '+').replace(/_/g, '/');\n    while (s.length % 4) s += '=';\n    return Buffer.from(s, 'base64').toString('utf8');\n  }\n  const authHeader = item.headers?.authorization ?? '';\n  const token = authHeader.replace(/^Bearer\\s+/i, '');\n  if (!token) throw new Error('401: Token eksik');\n  const parts = token.split('.');\n  if (parts.length !== 3) throw new Error('401: Geçersiz token');\n  const [header, payload, sig] = parts;\n  const expected = crypto.createHmac('sha256', $env.JWT_SECRET)\n    .update(`${header}.${payload}`).digest('base64')\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n  const __sigBuf = Buffer.from(sig);\nconst __expBuf = Buffer.from(expected);\nif (__sigBuf.length !== __expBuf.length || !crypto.timingSafeEqual(__sigBuf, __expBuf)) throw new Error('401: Geçersiz imza');\n  const claims = JSON.parse(b64uDecode(payload));\n  if (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n  return claims;\n}\nconst item = $input.first().json;\nconst claims = jwtVerify(item);\nconst body = item.body ?? {};\nif (!body.draft_ids || !Array.isArray(body.draft_ids) || body.draft_ids.length === 0) throw new Error('400: draft_ids zorunlu');\nif (body.draft_ids.length > 20) throw new Error('400: En fazla 20 taslak');\nconst validActions = ['approve', 'reject'];\nif (!validActions.includes(body.action)) throw new Error('400: Geçersiz batch action');\nreturn [{ json: { draft_ids: body.draft_ids, action: body.action, _sub: claims.sub } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

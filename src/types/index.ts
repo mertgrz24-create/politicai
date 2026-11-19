@@ -49,6 +49,7 @@ export type DraftJobStatus =
   | 'fetching_news'
   | 'building_prompt'
   | 'calling_gemini'
+  | 'calling_ai'
   | 'moderating'
   | 'saved'
   | 'failed'
@@ -95,6 +96,23 @@ export interface Post {
   retweets: number
   replies: number
   last_metrics_sync: string | null
+}
+
+// GET /api/history satırı — posts + drafts.variant_label + news_pool başlık/link join'i
+export interface HistoryItem {
+  id: string
+  content: string
+  status: PostStatus
+  error_message: string | null
+  published_at: string | null
+  twitter_post_id: string | null
+  likes: number
+  retweets: number
+  replies: number
+  variant_label: DraftVariant | null
+  news_title: string | null
+  news_link: string | null
+  source_name: string | null
 }
 
 export interface AuditEntry {

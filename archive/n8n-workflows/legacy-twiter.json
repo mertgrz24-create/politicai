@@ -1,0 +1,425 @@
+{
+  "name": "twiter",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 18,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        3040
+      ],
+      "id": "5b8fda67-51ca-48ce-81db-40e129a4b190",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lr47w2w_xkDfmE6sAnXJj_9DRlpodQErVzfoCi6Z3m0",
+          "mode": "list",
+          "cachedResultName": "Başlıksız e-tablo",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lr47w2w_xkDfmE6sAnXJj_9DRlpodQErVzfoCi6Z3m0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sayfa1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lr47w2w_xkDfmE6sAnXJj_9DRlpodQErVzfoCi6Z3m0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Twit": "={{ $('Message a model').item.json.content.parts[0].text }}",
+            "Tarih": "={{ $now }}",
+            "durum ": "Yayınlanacak",
+            "Link": "={{ $json.link }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "Twit",
+              "displayName": "Twit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tarih",
+              "displayName": "Tarih",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "durum ",
+              "displayName": "durum ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1872,
+        3024
+      ],
+      "id": "11b8612b-fc88-45e9-8dc1-ec71ce0630dd",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "74FqF8crrVoZWPcW",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.trthaber.com/sondakika.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        32,
+        2864
+      ],
+      "id": "d1017c5c-40be-4337-a7d2-fba324249207",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        192,
+        2864
+      ],
+      "id": "475e20e5-9e67-4b42-9547-ab8bd89698fe",
+      "name": "Limit TRTHaber"
+    },
+    {
+      "parameters": {
+        "url": "https://www.ahaber.com.tr/rss/gundem.xml",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        32,
+        3040
+      ],
+      "id": "98bdfd11-67a4-41b5-a1eb-924ddb556ee9",
+      "name": "RSS Read1"
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        192,
+        3040
+      ],
+      "id": "56695133-e7d5-4c54-bf00-d34a629110a8",
+      "name": "Limit A Haber"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        480,
+        3024
+      ],
+      "id": "35aa3979-bff3-4206-8313-be8e4a840d3c",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "https://www.yenisafak.com/rss?xml=gundem",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        32,
+        3232
+      ],
+      "id": "59893414-a28b-476c-bbbb-8a557940fdee",
+      "name": "RSS Read3"
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        192,
+        3232
+      ],
+      "id": "807eb853-9d94-4f3d-a7b7-e1b85562f1f5",
+      "name": "Limit YeniSafak"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Role: You are a professional social media manager for a conservative, religious, and pro-government Turkish politician.\nTone and Style Reference:\nYour writing style must match the following example:\n\"Aziz milletimizin büyük bir azim ve fedakarlıkla verdiği bağımsızlık mücadelesinin dizeleri olan, her okunuşta göğsümüzü kabartan İstiklal Marşı’mızın kabulünün yıl dönümü kutlu olsun. Allah bu millete bir daha İstiklal Marşı yazdırmasın!\"\nTask: Write a single, high-quality tweet in TURKISH based on the news provided below, following the same tone and vocabulary style as the reference above.\nSTRICT RULES:\nOUTPUT LANGUAGE: Use only natural, fluent, and dignified Turkish. NEVER use English words.\nFORMAT: Output ONLY the tweet text. No titles, no explanations, no quotes.\nFORBIDDEN: ABSOLUTELY NO EMOJIS AND NO HASHTAGS.\nCONTENT: Do not repeat the news headline. Transform the news into a personal reaction or opinion from the politician's perspective, showing statecraft and wisdom.\nSCOPE: Focus only on domestic Turkish topics. Do not comment on foreign policy or international conflicts.\nSTYLE: Use a unifying yet firm tone, respectful of national and religious values. Max 280 characters.\nNews Title: {{ $json.title }}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        2816
+      ],
+      "id": "cf6ba61f-501b-4459-a127-2af96f4014af",
+      "name": "Message a model",
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Y6YtvjP1wdFS0zi7",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "type": "random"
+      },
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        784,
+        3040
+      ],
+      "id": "0148841b-3896-4cfe-9318-5742c68a2b64",
+      "name": "Sort"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1680,
+        3024
+      ],
+      "id": "8ff75ace-f87a-4275-846b-13954eef2d15",
+      "name": "Merge1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Limit TRTHaber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit TRTHaber": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read1": {
+      "main": [
+        [
+          {
+            "node": "Limit A Haber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit A Haber": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "RSS Read3": {
+      "main": [
+        [
+          {
+            "node": "Limit YeniSafak",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit YeniSafak": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Sort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ab040e9c-673c-4967-b218-3e83b6d7f12d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1b901dfb30635c77089285cafe51c3525a551b2ed9da6e07b5605e2b2067385a"
+  },
+  "id": "z7ymZnfMFtEHq5pO",
+  "tags": []
+}

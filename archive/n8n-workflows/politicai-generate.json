@@ -6,7 +6,7 @@
         "httpMethod": "POST",
         "path": "generate",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "allowedOrigins": "http://localhost:5173,http://127.0.0.1:5173" }
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nif (sig !== expected) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nconst body = item.body ?? {};\nif (!body.news_id) throw new Error('400: news_id zorunlu');\nif (!body.client_id) throw new Error('400: client_id zorunlu');\n\nreturn [{ json: { news_id: body.news_id, client_id: body.client_id, _sub: claims.sub } }];"
+        "jsCode": "// JWT doğrulama — imza kontrolü ZORUNLU (webhook Cloudflare Tunnel ile dışa açık)\nconst crypto = require('crypto');\n\nfunction b64uDecode(s) {\n  s = s.replace(/-/g, '+').replace(/_/g, '/');\n  while (s.length % 4) s += '=';\n  return Buffer.from(s, 'base64').toString('utf8');\n}\n\nconst item = $input.first().json;\nconst authHeader = item.headers?.authorization ?? '';\nconst token = authHeader.replace(/^Bearer\\s+/i, '');\nif (!token) throw new Error('401: Token eksik');\n\nconst parts = token.split('.');\nif (parts.length !== 3) throw new Error('401: Geçersiz token');\n\nconst [header, payload, sig] = parts;\nconst expected = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64')\n  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');\n\nconst __sigBuf = Buffer.from(sig);\nconst __expBuf = Buffer.from(expected);\nif (__sigBuf.length !== __expBuf.length || !crypto.timingSafeEqual(__sigBuf, __expBuf)) throw new Error('401: Geçersiz imza');\n\nconst claims = JSON.parse(b64uDecode(payload));\nif (claims.exp < Math.floor(Date.now() / 1000)) throw new Error('401: Token süresi dolmuş');\n\nconst body = item.body ?? {};\nif (!body.news_id) throw new Error('400: news_id zorunlu');\nif (!body.client_id) throw new Error('400: client_id zorunlu');\n// SQL'e string interpolation ile girdikleri için format guard'ı şart\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nif (!UUID_RE.test(body.news_id)) throw new Error('400: news_id geçersiz format');\nif (!UUID_RE.test(body.client_id)) throw new Error('400: client_id geçersiz format');\n\nreturn [{ json: { news_id: body.news_id, client_id: body.client_id, user_email: claims.sub } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { news_id, client_id, _sub } = $input.first().json;\nconst job_id = require('crypto').randomUUID();\nreturn [{ json: { job_id, news_id, client_id, _sub } }];"
+        "jsCode": "const { news_id, client_id, user_email } = $input.first().json;\nconst job_id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n  const r = Math.random() * 16 | 0;\n  return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n});\nreturn [{ json: { job_id, news_id, client_id, user_email } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -126,10 +126,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM personas WHERE client_id = $1::uuid LIMIT 1",
-        "additionalFields": {
-          "queryParams": "={{ [$json.client_id] }}"
-        },
+        "query": "SELECT * FROM personas WHERE client_id = '{{ $json.client_id }}'::uuid LIMIT 1",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
@@ -146,7 +143,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Haber ve persona verilerini + context'i birleştir\nconst ctx = $('Context Taşı 1').first().json;\nconst news = $('Haber Çek').first().json;\nconst persona = $('Persona Çek').first().json;\n\nif (!news?.title) throw new Error('Haber bulunamadı: ' + ctx.news_id);\nif (!persona?.identity) throw new Error('Persona bulunamadı: ' + ctx.client_id);\n\nreturn [{ json: { ...ctx, news, persona } }];"
+        "jsCode": "const ctx = $('Context Taşı 1').first().json;\nconst news = $('Haber Çek').first().json;\nconst personaRaw = $('Persona Çek').first().json;\nconst persona = Array.isArray(personaRaw?.rows) ? personaRaw.rows[0] : personaRaw;\nif (!news?.title) throw new Error('Haber bulunamadı');\nif (!persona?.identity) throw new Error('Persona bulunamadı: ' + ctx.client_id);\nreturn [{ json: { ...ctx, news, persona } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -212,6 +209,16 @@
     },
     {
       "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst prompt = data.prompt || '';\nreturn [{ json: {\n  gemini_body: {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: { responseMimeType: \"application/json\", temperature: 0.7 }\n  }\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2970, 0],
+      "id": "dd000001-gen-0000-0000-000000000025",
+      "name": "Gemini Body Hazırla"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
         "sendHeaders": true,
@@ -221,10 +228,8 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": []
-        },
-        "jsonBody": "={\n  \"contents\": [{ \"role\": \"user\", \"parts\": [{ \"text\": {{ JSON.stringify($json.prompt) }} }] }],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"temperature\": 0.7,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 2048\n  }\n}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_body) }}",
         "options": {
           "retry": {
             "enabled": true,
@@ -243,7 +248,8 @@
       "typeVersion": 4.2,
       "position": [3080, 0],
       "id": "dd000001-gen-0000-0000-000000000016",
-      "name": "Gemini API"
+      "name": "Gemini API",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -253,7 +259,8 @@
       "typeVersion": 2,
       "position": [3300, 0],
       "id": "dd000001-gen-0000-0000-000000000017",
-      "name": "JSON Parse & Validate"
+      "name": "JSON Parse & Validate",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -331,7 +338,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Hata durumunda job'ı failed olarak işaretle\nconst crypto = require('crypto');\nconst errMsg = $input.first()?.json?.message ?? 'Bilinmeyen hata';\n\n// Tüm olası context node'larından job_id bul\nlet job_id = null;\nconst contextNodes = ['Context Taşı 2', 'Context Taşı 1', 'Context Koru', 'Job ID Üret'];\nfor (const nodeName of contextNodes) {\n  try {\n    const j = $(nodeName).first()?.json?.job_id;\n    if (j) { job_id = j; break; }\n  } catch { /* node henüz çalışmamış olabilir */ }\n}\n\nif (!job_id) return [{ json: { skipped: true, error: errMsg } }];\n\nconst esc = (s) => `'${String(s).replace(/'/g, \"''\")}'`;\nreturn [{ json: { sql: `UPDATE draft_jobs SET status='failed', error_message=${esc(errMsg.substring(0, 500))}, updated_at=now() WHERE id='${job_id}';`, job_id } }];"
+        "jsCode": "const errMsg = $input.first()?.json?.message ?? 'Bilinmeyen hata';\n\nlet job_id = null;\nconst contextNodes = ['Context Taşı 2', 'Context Taşı 1', 'Context Koru', 'Job ID Üret'];\nfor (const nodeName of contextNodes) {\n  try {\n    const j = $(nodeName).first()?.json?.job_id;\n    if (j) { job_id = j; break; }\n  } catch { /* node henüz çalışmamış olabilir */ }\n}\n\nif (!job_id) return [{ json: { skipped: true, error: errMsg } }];\n\nconst esc = (s) => `'${String(s).replace(/'/g, \"''\")}'`;\nreturn [{ json: { sql: `UPDATE draft_jobs SET status='failed', error_message=${esc(errMsg.substring(0, 500))}, updated_at=now() WHERE id='${job_id}';`, job_id } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -407,6 +414,9 @@
       "main": [[{ "node": "Context Taşı 2", "type": "main", "index": 0 }]]
     },
     "Context Taşı 2": {
+      "main": [[{ "node": "Gemini Body Hazırla", "type": "main", "index": 0 }]]
+    },
+    "Gemini Body Hazırla": {
       "main": [[{ "node": "Gemini API", "type": "main", "index": 0 }]]
     },
     "Gemini API": {

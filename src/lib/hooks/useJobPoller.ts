@@ -1,14 +1,12 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { apiGet } from '@/lib/api'
 import type { Draft, DraftJobStatus } from '@/types'
-
 interface JobResult {
   id: string
   status: DraftJobStatus
   error_message: string | null
   drafts?: Draft[]
 }
-
 interface PollerState {
   jobId: string | null
   status: DraftJobStatus | null
@@ -16,65 +14,88 @@ interface PollerState {
   error: string | null
   polling: boolean
 }
-
-const TERMINAL: DraftJobStatus[] = ['saved', 'failed']
-const POLL_INTERVAL_MS = 2000
-
+const initial: PollerState = {
+  jobId: null,
+  status: null,
+  drafts: [],
+  error: null,
+  polling: false,
+}
 export function useJobPoller() {
-  const [state, setState] = useState<PollerState>({
-    jobId: null,
-    status: null,
-    drafts: [],
-    error: null,
-    polling: false,
-  })
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const stop = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
+  const [state, setState] = useState<PollerState>(initial)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revision = useRef(0)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      revision.current++
+      if (timer.current) clearTimeout(timer.current)
     }
-    setState(prev => ({ ...prev, polling: false }))
   }, [])
-
-  const poll = useCallback((jobId: string) => {
-    apiGet<JobResult>(`/webhook/job-status?job_id=${jobId}`)
-      .then(data => {
-        const terminal = TERMINAL.includes(data.status)
-        setState(prev => ({
-          ...prev,
-          status: data.status,
-          drafts: data.drafts ?? prev.drafts,
-          error: data.status === 'failed' ? (data.error_message ?? 'Üretim başarısız.') : null,
-          polling: !terminal,
-        }))
-        if (!terminal) {
-          timerRef.current = setTimeout(() => poll(jobId), POLL_INTERVAL_MS)
-        }
-      })
-      .catch(() => {
-        // Geçici ağ hatası — bir sonraki turda tekrar dene
-        timerRef.current = setTimeout(() => poll(jobId), POLL_INTERVAL_MS * 2)
-      })
+  const poll = useCallback(async function pollJob(
+    jobId: string,
+    current: number,
+    failures = 0,
+  ): Promise<void> {
+    try {
+      const data = await apiGet<JobResult>(
+        `/api/job-status?job_id=${encodeURIComponent(jobId)}`,
+      )
+      if (!mounted.current || current !== revision.current) return
+      const terminal = data.status === 'saved' || data.status === 'failed'
+      setState((previous) => ({
+        ...previous,
+        status: data.status,
+        drafts: data.drafts ?? previous.drafts,
+        error:
+          data.status === 'failed'
+            ? data.error_message || 'Üretim tamamlanamadı.'
+            : null,
+        polling: !terminal,
+      }))
+      if (!terminal)
+        timer.current = setTimeout(() => {
+          void pollJob(jobId, current)
+        }, 2000)
+    } catch {
+      if (!mounted.current || current !== revision.current) return
+      setState((previous) => ({
+        ...previous,
+        error:
+          'Üretim durumuna ulaşılamıyor. Bağlantı yeniden deneniyor; sunucudaki işlem devam ediyor olabilir.',
+      }))
+      timer.current = setTimeout(
+        () => {
+          void pollJob(jobId, current, failures + 1)
+        },
+        Math.min(4000 * 2 ** Math.min(failures, 3), 30000),
+      )
+    }
   }, [])
-
-  const start = useCallback((jobId: string) => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    setState({
-      jobId,
-      status: 'queued',
-      drafts: [],
-      error: null,
-      polling: true,
-    })
-    timerRef.current = setTimeout(() => poll(jobId), POLL_INTERVAL_MS)
-  }, [poll])
-
+  const stop = useCallback(() => {
+    revision.current++
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (mounted.current)
+      setState((previous) => ({ ...previous, polling: false }))
+  }, [])
+  const start = useCallback(
+    (jobId: string) => {
+      if (!mounted.current) return
+      if (timer.current) clearTimeout(timer.current)
+      const current = ++revision.current
+      setState({ ...initial, jobId, status: 'queued', polling: true })
+      timer.current = setTimeout(() => {
+        void poll(jobId, current)
+      }, 2000)
+    },
+    [poll],
+  )
   const reset = useCallback(() => {
     stop()
-    setState({ jobId: null, status: null, drafts: [], error: null, polling: false })
+    if (mounted.current) setState(initial)
   }, [stop])
-
   return { ...state, start, stop, reset }
 }

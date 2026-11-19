@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { Brand, Banner } from '@/components/ui/Primitives'
 
 export default function LoginPage() {
   const { signIn } = useAuth()
@@ -9,72 +11,86 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (loading) return
     setError(null)
     setLoading(true)
-    const { error } = await signIn(email, password)
-    if (error) {
-      setError(error)
-    } else {
-      navigate('/')
+    try {
+      const result = await signIn(email, password)
+      if (result.error) setError(result.error)
+      else navigate('/', { replace: true })
+    } catch {
+      setError('Giriş yapılamadı. Bağlantını kontrol edip tekrar dene.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
-
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-gray-900 rounded-xl p-8 shadow-2xl border border-gray-800">
-        <h1 className="text-2xl font-bold text-white mb-1">PoliticAI</h1>
-        <p className="text-gray-500 text-sm mb-8">Siyasi iletişim asistanı</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
-              E-posta
-            </label>
+    <div className="pa-app pa-login">
+      <div className="pa-login-story">
+        <Brand />
+        <div>
+          <span className="pa-eyebrow">Kelimelerin bir karşılığı var.</span>
+          <h1>
+            Gündemi takip et.
+            <br />
+            Kendi sesinle
+            <br />
+            <em>sözünü söyle.</em>
+          </h1>
+          <p>
+            Haberden taslağa, incelemeden onaya.
+            <br />
+            İletişimini tek bir çalışma alanından yönet.
+          </p>
+        </div>
+        <span className="pa-small">PoliticAI · İletişim çalışma alanı</span>
+      </div>
+      <main className="pa-login-form">
+        <form onSubmit={handleSubmit}>
+          <span className="pa-eyebrow">Yeniden merhaba</span>
+          <h2>Çalışma alanına gir.</h2>
+          <p>Gündemi ve inceleme bekleyen taslaklarını buradan takip et.</p>
+          <label className="pa-field" htmlFor="login-email">
+            E-posta adresi
             <input
+              id="login-email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               required
-              autoComplete="email"
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
+              autoComplete="username"
               placeholder="ornek@mail.com"
+              disabled={loading}
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
-              Şifre
-            </label>
+          </label>
+          <label className="pa-field" htmlFor="login-password">
+            Şifre
             <input
+              id="login-password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
               autoComplete="current-password"
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
-              placeholder="••••••••"
+              disabled={loading}
             />
-          </div>
-
-          {error && (
-            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg py-2.5 text-sm font-medium transition-colors mt-2"
-          >
-            {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+          </label>
+          {error && <Banner kind="error">{error}</Banner>}
+          <button className="pa-button" type="submit" disabled={loading}>
+            {loading ? 'Giriş yapılıyor…' : 'Çalışma alanına gir'}
+            {loading ? (
+              <Loader2 className="pa-spin" size={17} />
+            ) : (
+              <ArrowRight size={17} />
+            )}
           </button>
+          <p className="pa-login-note">
+            Taslaklar, sen onaylamadan yayınlanmaz.
+          </p>
         </form>
-      </div>
+      </main>
     </div>
   )
 }

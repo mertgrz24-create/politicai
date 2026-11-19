@@ -3,3 +3,18 @@ node_modules/
 .env.local
 dist/
 supabase/.temp/
+.DS_Store
+
+# tsc derleme artıkları (tsc -b yanlışlıkla çalıştırılırsa kök dizini kirletmesin)
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Local deployment configuration and credentials
+.env.*
+!.env.example
+.vercel/
+.vercel
+
+# Yerel Claude Code ayarları
+.claude/
