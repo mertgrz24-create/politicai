@@ -10,7 +10,9 @@
     "dev:ui": "vite",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json",
     "db:migrate": "tsx scripts/migrate.ts",
-    "auth:hash": "node scripts/hash-password.mjs"
+    "auth:hash": "node scripts/hash-password.mjs",
+    "auth:set": "node scripts/set-auth.mjs",
+    "ai:set": "node scripts/set-ai.mjs"
   },
   "dependencies": {
     "jose": "^6.2.3",

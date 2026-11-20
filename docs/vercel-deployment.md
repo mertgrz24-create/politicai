@@ -33,6 +33,8 @@ Güçlü sır üretimi:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
+Giriş e-postası/şifresini veya yapay zekâ anahtarını Vercel Production'a yapıştırmadan yazmak için `npm run auth:set` ve `npm run ai:set` betiklerini kullan (değerler gizli girilir, sensitive olarak yazılır). Sonrasında `vercel redeploy <son-production-adresi>` gerekir; Production env değişiklikleri yeni deploy olmadan geçerli olmaz.
+
 JWT ve cron için ayrı değerler üret. Claude erişimi başvuru kredisi olmadan da sağlayıcı hesabındaki kredi/faturalama koşullarına bağlıdır. Otomatik ücretli sağlayıcı değişimi veya tekrar deneme yoktur. Günlük iş sınırı parasal harcama garantisi değildir; sağlayıcı hesabından ayrıca bütçe sınırı belirle.
 
 ## Veritabanı geçişi
@@ -67,7 +69,7 @@ Vercel hesabı/projesi bu repoya otomatik bağlanmaz. `vercel --prod` komutunu y
 - Sayfa kapanınca server işi devam edebilir; sayfa yeniden açıldığında sonuçlar taslak listesinde bulunur. Aktif ilerleme paneli refresh sonrası otomatik devam ettirilmez.
 - Claude ve Gemini aynı persona, prompt ve üç varyant biçimini kullanır. JSON ve benzersiz tonlar doğrulanır. Karakter sınırını aşan çıktılar onaylanamaz; düzenlenebilir rejected taslak olarak korunur.
 - Kaynak metinleri talimat olarak kabul edilmez. RSS yalnızca sunucudaki sabit HTTPS kaynaklarından okunur; DTD/entity XML reddedilir, boyut ve süre sınırları vardır. Kaynaklardan biri çalışmazsa diğerlerinin haberleri saklanır ve uyarı gösterilir.
-- Cron `0 5 * * *`: UTC 05:00, Türkiye'de yaklaşık 08:00. Hobby'de kesin saat garanti edilmez. Kaynak toplama iki dakikada bir ile sınırlı; kullanıcı **Yeni haberleri getir** ile ayrıca tetikleyebilir.
+- Cron `0 15 * * *`: UTC 15:00, Türkiye'de 18:00. Hobby'de kesin saat garanti edilmez. Kaynak toplama iki dakikada bir ile sınırlı; kullanıcı **Yeni haberleri getir** ile ayrıca tetikleyebilir.
 - Vercel Hobby kişisel/ticari olmayan kullanım içindir. Ticari dağıtımı otomatik ücretsiz kabul etme. Ücretsiz Neon kotaları ve model erişimi sağlayıcı koşullarına bağlıdır.
 - `/api/publish` 501 döner. Hiçbir X gönderisi veya sahte başarılı yayın kaydı oluşturulmaz. Eski posts kayıtları geçmişte korunur.
 
