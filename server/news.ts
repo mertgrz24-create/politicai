@@ -7,6 +7,8 @@ const SOURCES = [
   { name: 'A Haber', url: 'https://www.ahaber.com.tr/rss/gundem.xml' },
   { name: 'Yeni Şafak', url: 'https://www.yenisafak.com/rss?xml=gundem' },
 ]
+const PER_SOURCE_LIMIT = 10 // kaynak başına en fazla haber
+const MAX_AGE_DAYS = 3 // bundan eski haberler alınmaz
 const parser = new Parser()
 const plain = (s: string | undefined, max: number) => (s ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 const safeLink = (link: string | undefined) => {
@@ -34,13 +36,16 @@ async function readFeed(source: typeof SOURCES[number]) {
     // Reject DTD/entity declarations before parsing untrusted XML.
     if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('unsupported XML')
     const feed = await parser.parseString(xml)
-    return feed.items.slice(0, 30).flatMap(item => {
+    const oldest = Date.now() - MAX_AGE_DAYS * 86_400_000
+    return feed.items.flatMap(item => {
       const link = safeLink(item.link), title = plain(item.title, 500)
       if (!link || !title) return []
       const date = new Date(item.isoDate || item.pubDate || '')
+      const valid = !Number.isNaN(date.getTime())
+      if (valid && date.getTime() < oldest) return []
       return [{ source_name: source.name, title, description: plain(item.contentSnippet || item.content, 4000), link,
-        published_at: Number.isNaN(date.getTime()) ? null : date.toISOString() }]
-    })
+        published_at: valid ? date.toISOString() : null }]
+    }).slice(0, PER_SOURCE_LIMIT)
   } finally { clearTimeout(timeout) }
 }
 export async function collectNews() {

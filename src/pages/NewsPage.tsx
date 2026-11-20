@@ -378,9 +378,11 @@ export default function NewsPage() {
             />
           ) : (
             <div className="pa-feed-list">
-              {filtered.map((item) => (
+              {filtered.map((item) => {
+                const itemUrl = safeHttpUrl(item.link)
+                return (
+                <div className="pa-news-item" key={item.id}>
                 <button
-                  key={item.id}
                   className={`pa-news-row ${selected?.id === item.id ? 'is-selected' : ''}`}
                   aria-pressed={selected?.id === item.id}
                   disabled={busy}
@@ -403,7 +405,20 @@ export default function NewsPage() {
                     {item.processed ? 'Taslak üretildi' : 'Yeni haber'}
                   </span>
                 </button>
-              ))}
+                {itemUrl && (
+                  <a
+                    className="pa-news-link"
+                    href={itemUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Kaynağı aç: ${item.title}`}
+                  >
+                    Kaynak <ExternalLink size={12} />
+                  </a>
+                )}
+                </div>
+                )
+              })}
             </div>
           )}
           <p className="pa-small pa-feed-note">

@@ -52,7 +52,8 @@ async function route(request: Request, schedule: Schedule, ip: string) {
   if (url.searchParams.has('client_id') && url.searchParams.get('client_id') !== client)
     throw new HttpError(403, 'Bu hesaba erişim yetkin yok.')
   if (path === '/api/news-list' && method === 'GET')
-    return json({ news: await sql`SELECT * FROM news_pool ORDER BY fetched_at DESC, id LIMIT 200` })
+    return json({ news: await sql`SELECT * FROM news_pool WHERE COALESCE(published_at, fetched_at) > now() - interval '3 days'
+      ORDER BY published_at DESC NULLS LAST, fetched_at DESC, id LIMIT 60` })
   if (path === '/api/drafts' && method === 'GET')
     return json({ drafts: await sql`SELECT d.*, n.title AS news_title, n.source_name FROM drafts d LEFT JOIN news_pool n ON n.id=d.news_id WHERE d.client_id=${client} ORDER BY d.created_at DESC, d.id LIMIT 300` })
   if (path === '/api/persona' && method === 'GET') {
