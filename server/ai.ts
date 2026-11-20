@@ -56,6 +56,7 @@ export function parseVariants(raw: string): Variant[] {
   let value
   try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) }
   catch { throw new HttpError(502, 'Sağlayıcı geçerli JSON döndürmedi. Otomatik ücretli tekrar yapılmadı.') }
+  if (value && value.out_of_scope === true) throw new HttpError(409, 'Haber iç gündem kapsamı dışında; taslak üretilmedi.')
   const labels = ['sert', 'uzlasmaci', 'espriyle']
   if (!Array.isArray(value.variants) || value.variants.length !== 3)
     throw new HttpError(502, 'Sağlayıcı üç taslak döndürmedi.')
